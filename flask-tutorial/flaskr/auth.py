@@ -28,7 +28,8 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 @bp.route("/register", methods=["GET", "POST"])
 def register():
     """
-    The register view function
+    The register view
+
     :return:
     """
     if request.method == "POST":
@@ -42,14 +43,14 @@ def register():
         elif not password:
             error = "Password is required"
         elif db.execute(
-                "SELECT id FROM user WHERE username = ?", username
+                "SELECT id FROM user WHERE username = ?", (username,)
         ).fetchone() is not None:    # Returns one row from the query
             error = "User {} is already registered".format(username)
 
         if error is None:
             db.execute(
                 "INSERT INTO user (username, password) VALUES (?, ?)",
-                username, generate_password_hash(password))
+                (username, generate_password_hash(password)))
             db.commit()       # Save the changes since data is modified
             return redirect(url_for("auth.register"))
 
@@ -62,6 +63,11 @@ def register():
 
 @bp.route('/login', methods=('GET', 'POST'))
 def login():
+    """
+    The login view
+
+    :return:
+    """
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -88,6 +94,17 @@ def login():
 
 @bp.before_app_request
 def load_logged_in_user():
+    """
+    At the beginning of each request, if a user is logged in their
+    information should be loaded and made available to other views
+
+    Checks if a user id is stored in the session and gets that user’s
+    data from the database, storing it on g.user, which lasts for the
+    length of the request. If there is no user id, or if the id doesn’t
+    exist, g.user will be None.
+
+    :return:
+    """
     user_id = session.get('user_id')
 
     if user_id is None:
@@ -98,7 +115,33 @@ def load_logged_in_user():
         ).fetchone()
 
 
+@bp.route("/logout")
+def logout():
+    """
+    To log out, you need to remove the user id from the session. Then
+    load_logged_in_user won’t load a user on subsequent requests.
+
+    :return:
+    """
+    session.clear()
+    return redirect(url_for("index"))
+
+
 def login_required(view):
+    """
+    Creating, editing, and deleting blog posts will require a user to
+    be logged in. A decorator can be used to check this for each view
+    it’s applied to.
+
+    This decorator returns a new view function that wraps the original
+    view it’s applied to. The new function checks if a user is loaded and
+    redirects to the login page otherwise. If a user is loaded the original
+    view is called and continues normally. You’ll use this decorator when
+     writing the blog views.
+
+    :param view:
+    :return:
+    """
     @functools.wraps(view)
     def wrapped_view(**kwargs):
         if g.user is None:
